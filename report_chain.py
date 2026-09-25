@@ -9,7 +9,12 @@
 降级策略:LLM 调用失败时不抛异常、不白屏,自动退回规则模板报告
 (与成员B 的 qa_chain.answer_fallback 风格一致)。
 """
+from datetime import date
+
 from llm import chat
+
+# 报告日期(调用时取当天)
+DATE_STR = date.today().isoformat()
 
 # 类别中文名,供模板报告显示
 CLASS_NAME_CN = {"crack": "裂缝", "spalling": "剥落"}
@@ -76,6 +81,8 @@ def _detection_text(detections: list) -> str:
 
 REPORT_PROMPT = """你是一名大坝混凝土结构巡检专家。请根据以下 YOLO 检测结果,生成一份标准化 Markdown 巡检报告。
 
+今天是 {today}。请在报告开头写明报告日期,不要写"待填写"或臆造其他日期。
+
 要求:
 - 用 Markdown 格式,标题层级清晰、序号连续(不要出现两个"三")
 - 包含以下部分:巡检概况、缺陷列表、风险等级(低/中/高)、整改建议、是否需要人工复核
@@ -87,7 +94,7 @@ REPORT_PROMPT = """你是一名大坝混凝土结构巡检专家。请根据以�
 {detection_text}
 """
 
-VIDEO_PROMPT = """你是一名大坝混凝土结构巡检专家。以下是一次视频巡检的抽帧检测结果(每 {interval} 秒抽 1 帧)。
+VIDEO_PROMPT = """你是一名大坝混凝土结构巡检专家。以下是一次视频巡检的抽帧检测结果(每 {interval} 秒抽 1 帧),巡检日期 {today}。
 
 要求:
 - 用 Markdown 格式,标题层级清晰、序号连续
@@ -105,7 +112,7 @@ VIDEO_PROMPT = """你是一名大坝混凝土结构巡检专家。以下是一�
 # ---------------------------------------------------------------------------
 def generate_report(detections: list) -> str:
     """输入 detect() 的结果,返回 Markdown 巡检报告。LLM 失败时降级为模板报告。"""
-    prompt = REPORT_PROMPT.format(detection_text=_detection_text(detections))
+    prompt = REPORT_PROMPT.format(today=DATE_STR, detection_text=_detection_text(detections))
     try:
         return chat([{"role": "user", "content": prompt}])
     except Exception as e:
@@ -135,7 +142,7 @@ def generate_video_report(samples: list) -> str:
             lines.append(f"{s['time_sec']}s:未检出")
     samples_text = "\n".join(lines)
 
-    prompt = VIDEO_PROMPT.format(interval=1, samples_text=samples_text)
+    prompt = VIDEO_PROMPT.format(interval=1, today=DATE_STR, samples_text=samples_text)
     try:
         return chat([{"role": "user", "content": prompt}])
     except Exception as e:

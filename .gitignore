@@ -52,3 +52,5 @@ venv/
 # 成员B的测试图(少量小图,需要进 git)
 !test_images/*.jpg
 !test_images/*.png
+_frame_tmp.jpg
+_video_out.mp4

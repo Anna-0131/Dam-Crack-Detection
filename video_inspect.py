@@ -1,11 +1,17 @@
 # -*- coding: utf-8 -*-
 """视频巡检 —— 成员B。抽帧 → 逐帧检测 → 输出标注视频 + 每帧检测结果。"""
 import os
-import tempfile
 
 import cv2
+from PIL import Image
 
 SAMPLE_INTERVAL_SEC = 1  # 每 1 秒抽 1 帧做检测(CPU 机器,演示节奏够用)
+
+# 临时文件放在项目目录(纯英文路径)。
+# cv2 在含中文的路径(如 C:\Users\方方\...)下写文件会静默失败。
+WORK_DIR = os.path.dirname(os.path.abspath(__file__))
+FRAME_TMP = os.path.join(WORK_DIR, "_frame_tmp.jpg")
+VIDEO_OUT = os.path.join(WORK_DIR, "_video_out.mp4")
 
 
 def process_video(video_path, detect_fn):
@@ -20,10 +26,9 @@ def process_video(video_path, detect_fn):
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     sample_every = max(1, int(fps * SAMPLE_INTERVAL_SEC))
 
-    out_path = os.path.join(tempfile.gettempdir(), "dam_agent_video_out.mp4")
     writer = None
     for fourcc in ("avc1", "mp4v"):  # avc1(H.264)浏览器兼容最好,失败退回 mp4v
-        w = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*fourcc),
+        w = cv2.VideoWriter(VIDEO_OUT, cv2.VideoWriter_fourcc(*fourcc),
                             fps, (width, height))
         if w.isOpened():
             writer = w
@@ -40,9 +45,9 @@ def process_video(video_path, detect_fn):
         if not ok:
             break
         if frame_idx % sample_every == 0:  # 采样帧:落盘 → 检测
-            tmp_img = os.path.join(tempfile.gettempdir(), "dam_agent_frame.jpg")
-            cv2.imwrite(tmp_img, frame)
-            last_dets = detect_fn(tmp_img)
+            # 用 PIL 落盘:cv2.imwrite 在中文路径下会静默失败
+            Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).save(FRAME_TMP)
+            last_dets = detect_fn(FRAME_TMP)
             samples.append({"time_sec": round(frame_idx / fps, 1),
                             "detections": last_dets})
         for d in last_dets:  # 中间帧沿用最近一次采样结果画框
@@ -57,4 +62,4 @@ def process_video(video_path, detect_fn):
     writer.release()
     if not samples:
         raise RuntimeError("视频里没有读到任何帧")
-    return out_path, samples
+    return VIDEO_OUT, samples

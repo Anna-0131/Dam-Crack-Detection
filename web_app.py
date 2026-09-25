@@ -2,10 +2,8 @@
 """大坝缺陷巡检智能体 —— Web 界面(成员B)。
 运行:在项目根目录执行 python web_app.py,浏览器打开 http://127.0.0.1:7860
 """
-import os
-import tempfile
-
 import gradio as gr
+from PIL import Image
 
 from detector import detect
 from report_chain import generate_report, generate_video_report
@@ -16,14 +14,12 @@ from video_inspect import process_video
 QA_MAX_DETS = 20  # 视频抽帧结果很多,问答只取前 20 条,避免 prompt 过长
 
 
-def run_inspection(image):
+def run_inspection(image_path):
     """图片巡检:检测 → 画框 → 报告。返回(标注图, 报告, 检测结果状态)"""
-    if image is None:
+    if not image_path:
         return None, "## 巡检报告\n\n请先上传图片。", None
-    tmp_path = os.path.join(tempfile.gettempdir(), "dam_agent_upload.jpg")
-    image.save(tmp_path)
-    detections = detect(tmp_path)
-    annotated = draw_boxes(image, detections)
+    detections = detect(image_path)
+    annotated = draw_boxes(Image.open(image_path), detections)
     report = generate_report(detections)
     return annotated, report, detections
 
@@ -62,7 +58,7 @@ with gr.Blocks(title="大坝缺陷巡检智能体") as demo:
     with gr.Tab("图片巡检"):
         with gr.Row():
             with gr.Column():
-                input_img = gr.Image(type="pil", label="上传巡检照片")
+                input_img = gr.Image(type="filepath", label="上传巡检照片")
                 inspect_btn = gr.Button("开始巡检", variant="primary")
             with gr.Column():
                 output_img = gr.Image(type="pil", label="检测结果")

@@ -13,3 +13,7 @@
 - 成员A:detector.py、report_chain.py
 - 成员B:web_app.py、qa_chain.py、utils.py、video_inspect.py
 - 共享:llm.py、INTERFACE.md
+
+## 仓库其他内容
+
+- 组长维护:检测服务(detect_server.py / detect_client.py)、数据集工具(build_damcrack_dataset.py 等)

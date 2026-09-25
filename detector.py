@@ -26,7 +26,7 @@ load_dotenv()
 
 # 组长检测服务地址。优先取环境变量 DETECT_SERVER_URL(可在 .env 里配置)。
 # 默认值仅为兜底,联调时请在 .env 写入实际可用的地址。
-SERVER_URL = os.environ.get("DETECT_SERVER_URL", "http://10.22.28.46:8000")
+SERVER_URL = os.environ.get("DETECT_SERVER_URL", "http://47.106.8.254:8000")
 
 # 请求超时(秒)。服务端首次请求含模型加载,给宽松一点;联调若嫌慢可调小。
 TIMEOUT = 60

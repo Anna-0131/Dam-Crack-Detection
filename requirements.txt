@@ -16,3 +16,4 @@ python-dotenv
 Pillow
 pydantic==2.10.6
 huggingface-hub<1.0
+requests

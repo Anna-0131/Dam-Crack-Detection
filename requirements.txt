@@ -1,7 +1,18 @@
+# ===== 检测服务依赖（服务器 Linux，模型负责人维护）=====
+# 注意：torch 要先装 CPU 版，否则 Linux 默认装带 CUDA 的版本（2GB+ 用不上）
+#   pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+ultralytics
+fastapi
+uvicorn
+python-multipart
+opencv-python-headless
+numpy
+
+# ===== 成员B：agent / Web 界面依赖 =====
 gradio==4.44.1
 openai
 python-dotenv
 Pillow
-opencv-python
 pydantic==2.10.6
 huggingface-hub<1.0

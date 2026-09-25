@@ -1,0 +1,13 @@
+[Unit]
+Description=DamCrack crack/spalling detection service (YOLO + FastAPI)
+After=network.target
+
+[Service]
+WorkingDirectory=/root
+Environment=CRACK_MODEL_PATH=/root/best.pt
+ExecStart=/root/venv/bin/python -m uvicorn detect_server:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

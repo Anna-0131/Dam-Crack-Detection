@@ -40,7 +40,7 @@ def health():
 
 
 @app.post('/detect')
-async def detect_image(file: UploadFile = File(...), conf: float = 0.25):
+async def detect_image(file: UploadFile = File(...), conf: float = 0.5):
     """接收一张图片，返回检测结果（结构化 + 标注图 base64 + 文本摘要）。"""
     data = await file.read()
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)

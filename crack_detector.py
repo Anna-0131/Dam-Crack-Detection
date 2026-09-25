@@ -42,7 +42,7 @@ MODEL_PATH = os.environ.get(
     'CRACK_MODEL_PATH',
     r'D:\.Download\crack-detection\runs\detect\damcrack_2cls\weights\best.pt',
 )
-DEFAULT_CONF = 0.25   # 置信度阈值，低于此值的框不返回
+DEFAULT_CONF = 0.5    # 置信度阈值，低于此值的框不返回（0.5 演示更干净，避免一条裂缝切碎成很多框）
 # ==============================================
 
 _model = None  # 模块级缓存，只加载一次模型

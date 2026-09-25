@@ -1,0 +1,7 @@
+gradio==4.44.1
+openai
+python-dotenv
+Pillow
+opencv-python
+pydantic==2.10.6
+huggingface-hub<1.0

@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+*.pt
+*.onnx
+runs/
+.venv/
+lib/
+Scripts/
+share/
+venv/

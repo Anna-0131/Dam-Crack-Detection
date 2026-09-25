@@ -1,7 +1,10 @@
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """大坝缺陷巡检智能体 —— Web 界面(成员B)。
 运行:在项目根目录执行 python web_app.py,浏览器打开 http://127.0.0.1:7860
 """
+import os
+import tempfile
+
 import gradio as gr
 from PIL import Image
 
@@ -14,10 +17,18 @@ from video_inspect import process_video
 QA_MAX_DETS = 20  # 视频抽帧结果很多,问答只取前 20 条,避免 prompt 过长
 
 
+def _save_report(report: str, filename: str) -> str:
+    """把报告写成临时 .md 文件,返回路径供 gr.File 下载。"""
+    path = os.path.join(tempfile.gettempdir(), filename)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(report)
+    return path
+
+
 def run_inspection(image_path):
-    """图片巡检:检测 → 画框 → 报告。返回(标注图, 报告, 检测结果状态)"""
+    """图片巡检:检测 → 画框 → 报告。返回(标注图, 报告, 检测结果状态, 报告文件路径)"""
     if not image_path:
-        return None, "## 巡检报告\n\n请先上传图片。", None
+        return None, "## 巡检报告\n\n请先上传图片。", None, None
     img = Image.open(image_path)
     try:
         detections = detect(image_path)
@@ -26,26 +37,26 @@ def run_inspection(image_path):
         return (img,
                 "## 巡检报告\n\n**检测服务暂时不可用,本次未完成检测。**\n\n"
                 f"错误信息:{type(e).__name__}\n\n"
-                "请确认检测服务已启动或稍后重试。", None)
+                "请确认检测服务已启动或稍后重试。", None, None)
     annotated = draw_boxes(img, detections)
     report = generate_report(detections)
-    return annotated, report, detections
+    return annotated, report, detections, _save_report(report, "dam_report.md")
 
 
 def run_video_inspection(video_path):
     """视频巡检:抽帧检测 → 输出标注视频 + 报告。"""
     if not video_path:
-        return None, "## 巡检报告\n\n请先上传视频。", None
+        return None, "## 巡检报告\n\n请先上传视频。", None, None
     try:
         out_video, samples = process_video(video_path, detect)
     except Exception as e:
         return (None,
                 "## 巡检报告\n\n**视频巡检失败,检测服务可能不可用。**\n\n"
                 f"错误信息:{type(e).__name__}\n\n"
-                "请确认检测服务已启动或稍后重试。", None)
+                "请确认检测服务已启动或稍后重试。", None, None)
     report = generate_video_report(samples)
     flat = [d for s in samples for d in s["detections"]][:QA_MAX_DETS]
-    return out_video, report, flat
+    return out_video, report, flat, _save_report(report, "dam_video_report.md")
 
 
 def chat_respond(question, history, detections):
@@ -77,8 +88,9 @@ with gr.Blocks(title="大坝缺陷巡检智能体") as demo:
             with gr.Column():
                 output_img = gr.Image(type="pil", label="检测结果")
         report_md = gr.Markdown("等待巡检…")  # 报告占整行,长报告不再挤在右半边
+        report_file = gr.File(label="下载巡检报告", interactive=False)
         inspect_btn.click(run_inspection, inputs=[input_img],
-                          outputs=[output_img, report_md, detections_state])
+                          outputs=[output_img, report_md, detections_state, report_file])
 
     with gr.Tab("视频巡检"):
         with gr.Row():
@@ -88,8 +100,9 @@ with gr.Blocks(title="大坝缺陷巡检智能体") as demo:
             with gr.Column():
                 output_video = gr.Video(label="检测结果(已标注)")
         video_report_md = gr.Markdown("等待巡检…")  # 报告占整行
+        video_report_file = gr.File(label="下载视频巡检报告", interactive=False)
         video_btn.click(run_video_inspection, inputs=[input_video],
-                        outputs=[output_video, video_report_md, detections_state])
+                        outputs=[output_video, video_report_md, detections_state, video_report_file])
 
     gr.Markdown("### 针对最近一次巡检结果问答")
     chatbot = gr.Chatbot(label="巡检问答", height=400, render_markdown=True, bubble_full_width=True)
@@ -103,4 +116,3 @@ with gr.Blocks(title="大坝缺陷巡检智能体") as demo:
                         outputs=[chatbot, question_box])
 
 demo.launch()
-

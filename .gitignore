@@ -1,0 +1,43 @@
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# ===== 模型权重（大文件，不进 git）=====
+*.pt
+runs/
+
+# ===== 数据集（大文件，不进 git）=====
+DamCrack_YOLO/
+Damage Detection_data/
+Damage Detection/Damage_Detection_YOLO/
+combined_dataset_YOLO/
+positive_dataset_YOLO/
+new_dataset/
+Negative/
+
+# ===== Python 虚拟环境 =====
+temp_env/
+
+# ===== 输出结果 / 图片 =====
+prediction_results/
+result/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.tif
+*.tiff
+
+# ===== 日志 =====
+*.log
+
+# ===== 测试图片数据 =====
+test/
+
+# ===== IDE / 工具 =====
+.idea/
+.vscode/
+.claude/

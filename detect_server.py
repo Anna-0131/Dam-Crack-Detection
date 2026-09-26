@@ -40,14 +40,17 @@ def health():
 
 
 @app.post('/detect')
-async def detect_image(file: UploadFile = File(...), conf: float = 0.25):
+async def detect_image(file: UploadFile = File(...), conf: float = 0.5):
     """接收一张图片，返回检测结果（结构化 + 标注图 base64 + 文本摘要）。"""
     data = await file.read()
     img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
     if img is None:
         raise HTTPException(status_code=400, detail='无法解码图片，请上传 jpg/png/bmp 等格式')
 
-    result = detect(img, conf=conf)
+    try:
+        result = detect(img, conf=conf)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'检测失败: {e}')
 
     # 标注图是 RGB numpy，cv2.imencode 需要 BGR，转一下再压成 JPEG base64
     annotated_bgr = cv2.cvtColor(result['annotated_image'], cv2.COLOR_RGB2BGR)
@@ -57,6 +60,7 @@ async def detect_image(file: UploadFile = File(...), conf: float = 0.25):
     return {
         'detections': result['detections'],
         'summary': result['summary'],
+        'quantification': result['quantification'],
         'report': result['report'],
         'annotated_image_base64': annotated_b64,
     }

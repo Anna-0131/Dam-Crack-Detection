@@ -33,6 +33,10 @@ SERVER_URL = os.environ.get("DETECT_SERVER_URL", "http://47.106.8.254:8000")
 # 请求超时(秒)。服务端首次请求含模型加载,给宽松一点;联调若嫌慢可调小。
 TIMEOUT = 60
 
+# 检测置信度阈值。演示推荐 0.5(组长验证效果最好的组合);
+# 可用环境变量 DETECT_CONF 覆盖(如设 0.25 会检出更多低置信度框)。
+CONF = float(os.environ.get("DETECT_CONF", "0.5"))
+
 
 def detect(image_path: str) -> list:
     """上传图片到组长检测服务,返回契约格式的检测结果列表;无缺陷返回 []。
@@ -49,6 +53,7 @@ def detect(image_path: str) -> list:
     with open(image_path, "rb") as f:
         resp = requests.post(
             f"{SERVER_URL}/detect",
+            params={"conf": CONF},
             files={"file": (os.path.basename(image_path), f, "image/jpeg")},
             timeout=TIMEOUT,
         )
@@ -80,6 +85,7 @@ def annotate(image_path: str) -> dict:
     with open(image_path, "rb") as f:
         resp = requests.post(
             f"{SERVER_URL}/detect",
+            params={"conf": CONF},
             files={"file": (os.path.basename(image_path), f, "image/jpeg")},
             timeout=TIMEOUT,
         )

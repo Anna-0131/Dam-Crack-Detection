@@ -6,7 +6,9 @@
 服务返回结果转换成成员B 契约要求的格式。
 
 对外只暴露 detect(image_path) -> list[dict],元素形如:
-    {"class": "crack", "conf": 0.87, "bbox_xyxy": [x1, y1, x2, y2]}
+    {"class": "crack", "conf": 0.87, "bbox_xyxy": [x1, y1, x2, y2],
+     "length_px": 44.8, "width_px": 30.0, "area_px": 999.0}
+其中 length_px/width_px/area_px 是组长服务新增的量化字段(旧服务可能为 None)。
 无缺陷返回 []。
 
 组长的服务返回每个框含 class / class_id / confidence / bbox_xyxy 四个字段,
@@ -61,6 +63,10 @@ def detect(image_path: str) -> list:
             "conf": float(det["confidence"]),
             "bbox_xyxy": [int(round(x1)), int(round(y1)),
                           int(round(x2)), int(round(y2))],
+            # 组长服务新增的量化字段(向后兼容:旧服务无此字段时为 None)
+            "length_px": det.get("length_px"),   # 裂缝长度(像素,对角线近似)
+            "width_px": det.get("width_px"),     # 裂缝宽度(像素,短边近似)
+            "area_px": det.get("area_px"),       # 框面积(像素²,剥落看这个)
         })
     return result
 
@@ -79,3 +85,20 @@ def annotate(image_path: str) -> dict:
         )
     resp.raise_for_status()
     return resp.json()
+
+
+def get_quantification(image_path: str) -> dict:
+    """返回顶层 quantification 汇总(裂缝数、最长裂缝、最大剥落面积等)。"""
+    return annotate(image_path).get("quantification", {})
+
+
+def get_heatmap(image_path: str):
+    """返回缺陷密度热力图(PIL.Image),供前端展示;无热力图时返回 None。"""
+    import base64
+    import io
+
+    from PIL import Image
+
+    data = annotate(image_path)
+    b64 = data.get("heatmap_base64", "")
+    return Image.open(io.BytesIO(base64.b64decode(b64))) if b64 else None

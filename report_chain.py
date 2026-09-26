@@ -72,10 +72,20 @@ def _detection_text(detections: list) -> str:
     for i, d in enumerate(detections, 1):
         name = CLASS_NAME_CN.get(d["class"], d["class"])
         x1, y1, x2, y2 = d["bbox_xyxy"]
-        lines.append(
+        text = (
             f"{i}. 类别:{name}({d['class']});置信度:{d['conf']:.2f};"
-            f"位置(像素):[{x1},{y1},{x2},{y2}];像素宽:{x2 - x1};像素高:{y2 - y1}。"
+            f"位置(像素):[{x1},{y1},{x2},{y2}]"
         )
+        # 组长服务提供的量化字段(length_px=裂缝长度,width_px=宽度,area_px=面积)
+        # 缺失时(旧服务)退回用 bbox 长宽近似
+        length_px, width_px, area_px = d.get("length_px"), d.get("width_px"), d.get("area_px")
+        if length_px is not None and width_px is not None:
+            text += f";裂缝长度:{length_px:.1f}px(对角线口径);宽度:{width_px:.1f}px"
+        else:
+            text += f";像素宽:{x2 - x1};像素高:{y2 - y1}"
+        if area_px is not None:
+            text += f";框面积:{area_px:.0f}px²"
+        lines.append(text + "。")
     return "\n".join(lines)
 
 
@@ -87,7 +97,7 @@ REPORT_PROMPT = """你是一名大坝混凝土结构巡检专家。请根据以�
 - 用 Markdown 格式,标题层级清晰、序号连续(不要出现两个"三")
 - 包含以下部分:巡检概况、缺陷列表、风险等级(低/中/高)、整改建议、是否需要人工复核
 - 风险等级要给出判断依据;置信度偏低或检测框重叠时要指出不确定性
-- 不要编造检测结果里没有的信息;像素尺寸不等于实际物理尺寸,不要臆造真实长度
+- 长/宽/面积均为服务给出的像素量化值(对角线/短边口径);像素尺寸不等于实际物理尺寸,不要臆造真实长度
 - 只输出报告正文,不要多余的前言或解释
 
 检测结果:

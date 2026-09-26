@@ -57,12 +57,18 @@ async def detect_image(file: UploadFile = File(...), conf: float = 0.5):
     ok, buf = cv2.imencode('.jpg', annotated_bgr, [cv2.IMWRITE_JPEG_QUALITY, 92])
     annotated_b64 = base64.b64encode(buf).decode('ascii') if ok else ''
 
+    # 热力图同样转 base64
+    heatmap_bgr = cv2.cvtColor(result['heatmap'], cv2.COLOR_RGB2BGR)
+    ok2, buf2 = cv2.imencode('.jpg', heatmap_bgr, [cv2.IMWRITE_JPEG_QUALITY, 92])
+    heatmap_b64 = base64.b64encode(buf2).decode('ascii') if ok2 else ''
+
     return {
         'detections': result['detections'],
         'summary': result['summary'],
         'quantification': result['quantification'],
         'report': result['report'],
         'annotated_image_base64': annotated_b64,
+        'heatmap_base64': heatmap_b64,
     }
 
 

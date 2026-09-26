@@ -107,6 +107,32 @@ def _build_report(detections: list) -> str:
     return '\n'.join(lines)
 
 
+def build_heatmap(image_rgb: np.ndarray, detections: list) -> np.ndarray:
+    """根据检测结果生成缺陷密度热力图（RGB），叠加在原图上。
+
+    每个检测框位置画一个椭圆热源（强度=置信度），高斯模糊平滑后套 JET 颜色映射，
+    叠加回原图。缺陷密集处偏红，稀疏处偏蓝。
+    """
+    if not detections:
+        return image_rgb  # 无缺陷时直接返回原图
+
+    image_bgr = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2BGR)
+    h, w = image_bgr.shape[:2]
+    heat = np.zeros((h, w), dtype=np.float32)
+    for d in detections:
+        x1, y1, x2, y2 = d['bbox_xyxy']
+        cx, cy = (x1 + x2) / 2, (y1 + y2) / 2
+        rx = max((x2 - x1) / 2, 10.0)   # 热源半径，最小 10px 保证可见
+        ry = max((y2 - y1) / 2, 10.0)
+        cv2.ellipse(heat, (int(cx), int(cy)), (int(rx), int(ry)), 0, 0, 360, float(d['confidence']), -1)
+    heat = cv2.GaussianBlur(heat, (0, 0), sigmaX=25)  # 平滑，让热源连成片
+    if heat.max() > 0:
+        heat = heat / heat.max()
+    heatmap_bgr = cv2.applyColorMap((heat * 255).astype(np.uint8), cv2.COLORMAP_JET)
+    overlay_bgr = cv2.addWeighted(image_bgr, 0.55, heatmap_bgr, 0.45, 0)
+    return cv2.cvtColor(overlay_bgr, cv2.COLOR_BGR2RGB)
+
+
 def detect(
     image: Union[str, Path, Image.Image, np.ndarray],
     conf: float = DEFAULT_CONF,
@@ -121,7 +147,7 @@ def detect(
             提供后会在每个检测框额外输出 length_cm / width_mm。
 
     Returns:
-        dict: {"detections", "summary", "quantification", "annotated_image", "report"}
+        dict: {"detections", "summary", "quantification", "annotated_image", "heatmap", "report"}
     """
     bgr = _to_bgr(image)
     model = _get_model()
@@ -162,7 +188,10 @@ def detect(
     # 4. 标注图（plot 返回 BGR，转成 RGB 方便 Gradio/网页展示）
     annotated_rgb = cv2.cvtColor(results.plot(), cv2.COLOR_BGR2RGB)
 
-    # 5. 文本摘要
+    # 5. 热力图（缺陷密度，叠加在原图上的 RGB 图）
+    heatmap_rgb = build_heatmap(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB), detections)
+
+    # 6. 文本摘要
     report = _build_report(detections)
 
     return {
@@ -170,6 +199,7 @@ def detect(
         'summary': summary,
         'quantification': quantification,
         'annotated_image': annotated_rgb,
+        'heatmap': heatmap_rgb,
         'report': report,
     }
 

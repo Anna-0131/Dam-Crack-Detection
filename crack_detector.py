@@ -75,33 +75,8 @@ def _to_bgr(image: Union[str, Path, Image.Image, np.ndarray]) -> np.ndarray:
     raise TypeError(f'不支持的输入类型: {type(image)}，仅支持路径 / PIL.Image / numpy.ndarray')
 
 
-def _classify_severity(crack_count: int, spalling_count: int, max_crack_len: float) -> str:
-    """根据裂缝数量、剥落数量、最长裂缝长度，给一个粗略的严重程度分级。
-
-    阈值是像素级的粗略近似，可按实际数据调整。
-    """
-    if crack_count + spalling_count == 0:
-        return '无损伤'
-    score = 0
-    if spalling_count > 0:
-        score += 2  # 剥落（表层脱落）是更严重的信号
-    if crack_count >= 5:
-        score += 2
-    elif crack_count >= 2:
-        score += 1
-    if max_crack_len > 400:
-        score += 2
-    elif max_crack_len > 200:
-        score += 1
-    if score >= 4:
-        return '严重'
-    if score >= 2:
-        return '中度'
-    return '轻度'
-
-
 def _build_quantification(detections: list) -> dict:
-    """汇总量化指标：数量、长度、面积、严重程度。"""
+    """汇总量化指标：数量、长度、面积。"""
     cracks = [d for d in detections if d['class'] == 'crack']
     spalling = [d for d in detections if d['class'] == 'spalling']
     crack_lens = [d['length_px'] for d in cracks]
@@ -116,11 +91,10 @@ def _build_quantification(detections: list) -> dict:
         'max_crack_length_px': round(max_len, 1),
         'avg_crack_length_px': round(avg_len, 1),
         'max_spalling_area_px': round(max_spall_area, 1),
-        'severity': _classify_severity(len(cracks), len(spalling), max_len),
     }
 
 
-def _build_report(detections: list, quantification: dict = None) -> str:
+def _build_report(detections: list) -> str:
     """由检测结果拼出一段确定性文本摘要，供 LLM 扩写成正式报告。"""
     if not detections:
         return '未检测到裂缝（crack）或剥落（spalling）损伤。'
@@ -130,8 +104,6 @@ def _build_report(detections: list, quantification: dict = None) -> str:
         # 裂缝报长度，剥落报面积
         size = f"长度 {d['length_px']:.0f}px" if d['class'] == 'crack' else f"面积 {d['area_px']:.0f}px²"
         lines.append(f"- {d['class']}（置信度 {d['confidence']:.2f}，{size}，位置 [{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}]）")
-    if quantification:
-        lines.append(f"严重程度：{quantification['severity']}")
     return '\n'.join(lines)
 
 
@@ -191,7 +163,7 @@ def detect(
     annotated_rgb = cv2.cvtColor(results.plot(), cv2.COLOR_BGR2RGB)
 
     # 5. 文本摘要
-    report = _build_report(detections, quantification)
+    report = _build_report(detections)
 
     return {
         'detections': detections,

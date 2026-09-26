@@ -430,5 +430,5 @@ with gr.Blocks(css=CUSTOM_CSS, title="大坝缺陷巡检智能体") as demo:
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(server_name="0.0.0.0")
 

@@ -342,12 +342,12 @@ def run_inspection(image_path, count):
 
 
 def run_video_inspection(video_path, count):
-    """视频巡检:抽帧检测 → 汇总报告"""
+    """视频巡检:抽帧检测 → 标注视频 + 汇总报告"""
     count = count + 1
     if not video_path:
         return None, "**请先上传一段巡检视频。**", None, None, count, _stats_html(count, [], SERVER_ONLINE)
     try:
-        samples = process_video(video_path)
+        video_out_path, samples = process_video(video_path, detect)
     except Exception as e:
         return None, f"**视频处理失败:** {e}", None, None, count, _stats_html(count, [], SERVER_ONLINE)
     if not samples:
@@ -357,7 +357,7 @@ def run_video_inspection(video_path, count):
     except Exception as e:
         report = f"**报告生成失败:** {e}"
     report_file = _save_report(report, "dam_video_report.md")
-    return samples[0], report, report_file, None, count, _stats_html(count, [], SERVER_ONLINE)
+    return video_out_path, report, report_file, None, count, _stats_html(count, [], SERVER_ONLINE)
 
 
 def chat_respond(question, history, detections):
@@ -409,7 +409,7 @@ with gr.Blocks(css=CUSTOM_CSS, title="大坝缺陷巡检智能体") as demo:
                 video_btn = gr.Button("开始视频巡检", variant="primary")
                 gr.Markdown("视频按秒抽帧检测,处理需要一些时间,请耐心等待。", elem_classes=["hint"])
             with gr.Column(scale=2, elem_classes=["card"]):
-                video_out = gr.Image(type="pil", label="抽帧检测预览")
+                video_out = gr.Video(label="标注巡检视频(红框)")
         with gr.Column(elem_classes=["card"]):
             video_report_md = gr.Markdown("上传视频并点击「开始视频巡检」后,视频巡检报告将显示在这里。")
             video_report_file = gr.File(label="下载视频巡检报告", interactive=False, elem_id="video_report_file")
@@ -431,3 +431,4 @@ with gr.Blocks(css=CUSTOM_CSS, title="大坝缺陷巡检智能体") as demo:
 
 if __name__ == "__main__":
     demo.launch()
+

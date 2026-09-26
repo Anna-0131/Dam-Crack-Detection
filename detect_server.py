@@ -47,7 +47,10 @@ async def detect_image(file: UploadFile = File(...), conf: float = 0.5):
     if img is None:
         raise HTTPException(status_code=400, detail='无法解码图片，请上传 jpg/png/bmp 等格式')
 
-    result = detect(img, conf=conf)
+    try:
+        result = detect(img, conf=conf)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f'检测失败: {e}')
 
     # 标注图是 RGB numpy，cv2.imencode 需要 BGR，转一下再压成 JPEG base64
     annotated_bgr = cv2.cvtColor(result['annotated_image'], cv2.COLOR_RGB2BGR)

@@ -22,6 +22,10 @@
 """
 
 import os
+
+# 必须在 import torch/ultralytics 之前设置，否则规避 OpenMP 冲突不生效
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 from collections import Counter
 from pathlib import Path
 from typing import Union
@@ -30,8 +34,6 @@ import cv2
 import numpy as np
 from PIL import Image
 from ultralytics import YOLO
-
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 
 # ==================== 配置 ====================
 # 模型路径：默认用 DamCrack 2 类模型。训练完成后 best.pt 会被更新，这里不用改。

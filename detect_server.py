@@ -60,6 +60,7 @@ async def detect_image(file: UploadFile = File(...), conf: float = 0.5):
     return {
         'detections': result['detections'],
         'summary': result['summary'],
+        'quantification': result['quantification'],
         'report': result['report'],
         'annotated_image_base64': annotated_b64,
     }

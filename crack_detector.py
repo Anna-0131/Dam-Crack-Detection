@@ -21,6 +21,7 @@
 - bbox_xyxy 为像素坐标 [左上x, 左上y, 右下x, 右下y]
 """
 
+import math
 import os
 
 # 必须在 import torch/ultralytics 之前设置，否则规避 OpenMP 冲突不生效
@@ -74,61 +75,128 @@ def _to_bgr(image: Union[str, Path, Image.Image, np.ndarray]) -> np.ndarray:
     raise TypeError(f'不支持的输入类型: {type(image)}，仅支持路径 / PIL.Image / numpy.ndarray')
 
 
-def _build_report(detections: list) -> str:
+def _classify_severity(crack_count: int, spalling_count: int, max_crack_len: float) -> str:
+    """根据裂缝数量、剥落数量、最长裂缝长度，给一个粗略的严重程度分级。
+
+    阈值是像素级的粗略近似，可按实际数据调整。
+    """
+    if crack_count + spalling_count == 0:
+        return '无损伤'
+    score = 0
+    if spalling_count > 0:
+        score += 2  # 剥落（表层脱落）是更严重的信号
+    if crack_count >= 5:
+        score += 2
+    elif crack_count >= 2:
+        score += 1
+    if max_crack_len > 400:
+        score += 2
+    elif max_crack_len > 200:
+        score += 1
+    if score >= 4:
+        return '严重'
+    if score >= 2:
+        return '中度'
+    return '轻度'
+
+
+def _build_quantification(detections: list) -> dict:
+    """汇总量化指标：数量、长度、面积、严重程度。"""
+    cracks = [d for d in detections if d['class'] == 'crack']
+    spalling = [d for d in detections if d['class'] == 'spalling']
+    crack_lens = [d['length_px'] for d in cracks]
+    max_len = max(crack_lens) if crack_lens else 0.0
+    avg_len = sum(crack_lens) / len(crack_lens) if crack_lens else 0.0
+    max_spall_area = max(d['area_px'] for d in spalling) if spalling else 0.0
+
+    return {
+        'crack_count': len(cracks),
+        'spalling_count': len(spalling),
+        'total_defects': len(detections),
+        'max_crack_length_px': round(max_len, 1),
+        'avg_crack_length_px': round(avg_len, 1),
+        'max_spalling_area_px': round(max_spall_area, 1),
+        'severity': _classify_severity(len(cracks), len(spalling), max_len),
+    }
+
+
+def _build_report(detections: list, quantification: dict = None) -> str:
     """由检测结果拼出一段确定性文本摘要，供 LLM 扩写成正式报告。"""
     if not detections:
         return '未检测到裂缝（crack）或剥落（spalling）损伤。'
     lines = [f'共检出 {len(detections)} 处损伤：']
     for d in sorted(detections, key=lambda x: -x['confidence']):
         x1, y1, x2, y2 = d['bbox_xyxy']
-        lines.append(f"- {d['class']}（置信度 {d['confidence']:.2f}，位置 [{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}]）")
+        # 裂缝报长度，剥落报面积
+        size = f"长度 {d['length_px']:.0f}px" if d['class'] == 'crack' else f"面积 {d['area_px']:.0f}px²"
+        lines.append(f"- {d['class']}（置信度 {d['confidence']:.2f}，{size}，位置 [{x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f}]）")
+    if quantification:
+        lines.append(f"严重程度：{quantification['severity']}")
     return '\n'.join(lines)
 
 
 def detect(
     image: Union[str, Path, Image.Image, np.ndarray],
     conf: float = DEFAULT_CONF,
+    pixels_per_cm: float = None,
 ) -> dict:
-    """对一张图片做裂缝/剥落检测，一次返回结构化结果、标注图和文本摘要。
+    """对一张图片做裂缝/剥落检测，返回结构化结果、量化指标、标注图和文本摘要。
 
     Args:
         image: 图片（文件路径 / PIL.Image / numpy BGR 数组）
-        conf: 置信度阈值，默认 0.25
+        conf: 置信度阈值，默认 0.5
+        pixels_per_cm: 可选。图片的像素-厘米换算比例（每厘米多少像素），
+            提供后会在每个检测框额外输出 length_cm / width_mm。
 
     Returns:
-        dict: {"detections", "summary", "annotated_image", "report"}
+        dict: {"detections", "summary", "quantification", "annotated_image", "report"}
     """
     bgr = _to_bgr(image)
     model = _get_model()
 
     results = model(bgr, conf=conf, verbose=False)[0]
 
-    # 1. 结构化检测结果
+    # 1. 结构化检测结果 + 每框的量化尺寸
     names = model.names  # {0: 'crack', 1: 'spalling'}
     detections = []
     boxes = results.boxes
     if boxes is not None and len(boxes) > 0:
         for box in boxes:
             cls_id = int(box.cls[0])
-            detections.append({
+            x1, y1, x2, y2 = [round(v, 1) for v in box.xyxy[0].tolist()]
+            w, h = x2 - x1, y2 - y1
+            length_px = round(math.hypot(w, h), 1)   # 对角线 ≈ 裂缝长度
+            width_px = round(min(w, h), 1)           # 短边 ≈ 裂缝宽度
+            d = {
                 'class': names[cls_id],
                 'class_id': cls_id,
                 'confidence': round(float(box.conf[0]), 4),
-                'bbox_xyxy': [round(v, 1) for v in box.xyxy[0].tolist()],
-            })
+                'bbox_xyxy': [x1, y1, x2, y2],
+                'length_px': length_px,
+                'width_px': width_px,
+                'area_px': round(w * h, 1),
+            }
+            if pixels_per_cm:  # 提供换算比例时，额外输出真实尺寸
+                d['length_cm'] = round(length_px / pixels_per_cm, 2)
+                d['width_mm'] = round(width_px / pixels_per_cm * 10, 2)
+            detections.append(d)
 
     # 2. 每类数量汇总
     summary = dict(Counter(d['class'] for d in detections))
 
-    # 3. 标注图（plot 返回 BGR，转成 RGB 方便 Gradio/网页展示）
+    # 3. 量化汇总（数量、长度、严重程度）
+    quantification = _build_quantification(detections)
+
+    # 4. 标注图（plot 返回 BGR，转成 RGB 方便 Gradio/网页展示）
     annotated_rgb = cv2.cvtColor(results.plot(), cv2.COLOR_BGR2RGB)
 
-    # 4. 文本摘要
-    report = _build_report(detections)
+    # 5. 文本摘要
+    report = _build_report(detections, quantification)
 
     return {
         'detections': detections,
         'summary': summary,
+        'quantification': quantification,
         'annotated_image': annotated_rgb,
         'report': report,
     }

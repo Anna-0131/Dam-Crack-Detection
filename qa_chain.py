@@ -19,7 +19,13 @@ def answer_question(question: str, detections: list, history: list = None) -> st
     """基于检测结果回答。失败时抛异常,由调用方兜底。"""
     content = f"本次检测结果(JSON):\n{json.dumps(detections, ensure_ascii=False)}"
     if history:
-        turns = [f"用户:{q}\n助手:{a}" for q, a in history[-4:]]  # 最近4轮
+        turns = []
+        for m in history[-4:]:  # 最近4轮
+            if isinstance(m, dict):
+                who = "用户" if m.get("role") == "user" else "助手"
+                turns.append(f"{who}:{m.get('content', '')}")
+            else:
+                turns.append(f"用户:{m[0]}\n助手:{m[1]}")
         content += "\n\n对话历史:\n" + "\n".join(turns)
     content += f"\n\n用户当前问题:{question}"
     return chat([

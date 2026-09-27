@@ -97,8 +97,15 @@ body::after {
 .gradio-container {
   position: relative;
   z-index: 1;
-  max-width: 1200px;
+  width: 100% !important;
+  max-width: 100% !important;
   background: transparent;
+}
+.gradio-container .main,
+.gradio-container .wrap,
+.gradio-container main {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 footer { display: none !important; }
 
@@ -177,7 +184,20 @@ footer { display: none !important; }
 /* ========== 图片预览限高 + 小图标按钮细化 ========== */
 #upload_img img, #output_img img, #heatmap_img img {
   max-height: 320px !important;
+  max-width: 100% !important;
+  width: auto !important;
   object-fit: contain !important;
+}
+
+/* ========== 图片巡检三卡片强制横排(不换行、等宽) ========== */
+#inspect_row {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 1rem;
+}
+#inspect_row > div {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
 }
 #upload_img button, #output_img button, #heatmap_img button {
   border-width: 1px !important;
@@ -352,21 +372,25 @@ def run_video_inspection(video_path, count):
         return None, f"**视频处理失败:** {e}", None, None, count, _stats_html(count, [], SERVER_ONLINE)
     if not samples:
         return None, "**未从视频中抽到有效帧。**", None, None, count, _stats_html(count, [], SERVER_ONLINE)
+    # 汇总所有采样帧的检测结果,供问答和统计使用
+    detections = []
+    for s in samples:
+        detections.extend(s.get("detections") or [])
     try:
         report = generate_video_report(samples)
     except Exception as e:
         report = f"**报告生成失败:** {e}"
     report_file = _save_report(report, "dam_video_report.md")
-    return video_out_path, report, report_file, None, count, _stats_html(count, [], SERVER_ONLINE)
+    return video_out_path, report, report_file, detections, count, _stats_html(count, detections, SERVER_ONLINE)
 
 
 def chat_respond(question, history, detections):
-    """基于最近一次图片巡检结果问答;服务不可用时降级为规则回答"""
+    """基于最近一次巡检结果问答;服务不可用时降级为规则回答"""
     history = history or []
     if not question or not str(question).strip():
         return history, ""
     if detections is None:
-        reply = "请先完成一次图片巡检,再向我提问。"
+        reply = "请先完成一次巡检(图片或视频),再向我提问。"
     else:
         dets = detections[:QA_MAX_DETS]
         try:
@@ -376,12 +400,16 @@ def chat_respond(question, history, detections):
                 reply = answer_fallback(question, dets)
             except Exception:
                 reply = "问答服务暂时不可用,请稍后重试。"
-    return history + [(question, reply)], ""
+    history = history + [
+        {"role": "user", "content": str(question)},
+        {"role": "assistant", "content": reply},
+    ]
+    return history, ""
 
 
 _check_server()
 
-with gr.Blocks(css=CUSTOM_CSS, title="大坝缺陷巡检智能体") as demo:
+with gr.Blocks(css=CUSTOM_CSS, fill_width=True, title="大坝缺陷巡检智能体") as demo:
     gr.HTML(HERO_HTML)
 
     detections_state = gr.State(None)
@@ -389,14 +417,14 @@ with gr.Blocks(css=CUSTOM_CSS, title="大坝缺陷巡检智能体") as demo:
     stats_html = gr.HTML(_stats_html(0, [], SERVER_ONLINE))
 
     with gr.Tab("图片巡检"):
-        with gr.Row():
-            with gr.Column(scale=1, elem_classes=["card"]):
+        with gr.Row(elem_id="inspect_row"):
+            with gr.Column(scale=1, min_width=0, elem_classes=["card"]):
                 input_img = gr.Image(type="filepath", label="上传坝面图像", elem_id="upload_img")
                 inspect_btn = gr.Button("开始巡检", variant="primary")
                 gr.Markdown("支持 jpg / png,单张检测约 2~5 秒,支持中文文件名。", elem_classes=["hint"])
-            with gr.Column(scale=1, elem_classes=["card"]):
+            with gr.Column(scale=1, min_width=0, elem_classes=["card"]):
                 output_img = gr.Image(type="pil", label="检测结果(红框标注)", elem_id="output_img")
-            with gr.Column(scale=1, elem_classes=["card"]):
+            with gr.Column(scale=1, min_width=0, elem_classes=["card"]):
                 heatmap_img = gr.Image(type="pil", label="缺陷密度热力图", elem_id="heatmap_img")
         with gr.Column(elem_classes=["card"]):
             report_md = gr.Markdown("上传图像并点击「开始巡检」后,巡检报告将显示在这里。")
@@ -404,12 +432,12 @@ with gr.Blocks(css=CUSTOM_CSS, title="大坝缺陷巡检智能体") as demo:
 
     with gr.Tab("视频巡检"):
         with gr.Row():
-            with gr.Column(scale=1, elem_classes=["card"]):
-                video_in = gr.Video(label="上传巡检视频")
+            with gr.Column(scale=1, min_width=0, elem_classes=["card"]):
+                video_in = gr.Video(label="上传巡检视频", format="mp4")
                 video_btn = gr.Button("开始视频巡检", variant="primary")
                 gr.Markdown("视频按秒抽帧检测,处理需要一些时间,请耐心等待。", elem_classes=["hint"])
             with gr.Column(scale=2, elem_classes=["card"]):
-                video_out = gr.Video(label="标注巡检视频(红框)")
+                video_out = gr.Video(label="标注巡检视频(红框)", format="mp4")
         with gr.Column(elem_classes=["card"]):
             video_report_md = gr.Markdown("上传视频并点击「开始视频巡检」后,视频巡检报告将显示在这里。")
             video_report_file = gr.File(label="下载视频巡检报告", interactive=False, elem_id="video_report_file")

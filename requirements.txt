@@ -10,10 +10,10 @@ opencv-python-headless
 numpy
 
 # ===== 成员B：agent / Web 界面依赖 =====
-gradio==4.44.1
+gradio==6.28.0
 openai
 python-dotenv
 Pillow
-pydantic==2.10.6
-huggingface-hub<1.0
+pydantic>=2.10
+huggingface-hub
 requests

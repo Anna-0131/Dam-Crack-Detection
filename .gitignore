@@ -30,6 +30,7 @@ result/
 *.bmp
 *.tif
 *.tiff
+*.mp4
 
 # ===== 日志 =====
 *.log
